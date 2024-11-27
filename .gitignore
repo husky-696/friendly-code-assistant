@@ -1,0 +1,11 @@
+node_modules/
+*.vsix
+.bolt/
+.DS_Store
+*.log
+dist/
+out/
+coverage/
+.env
+.env.local
+.env.*

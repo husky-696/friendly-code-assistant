@@ -1,0 +1,71 @@
+{
+    "name": "friendly-code-assistant",
+    "publisher": "Haj",
+    "displayName": "Friendly Code Assistant",
+    "description": "Your friendly AI coding companion with a cute cat avatar (powered by GLHF.chat)",
+    "version": "1.0.0",
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "icon": "media/cat-icon.png",
+    "activationEvents": [
+        ""
+    ],
+    "main": "./src/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "friendly-code-assistant",
+                    "title": "Friendly Code Assistant",
+                    "icon": "media/cat-icon.png"
+                }
+            ]
+        },
+        "views": {
+            "friendly-code-assistant": [
+                {
+                    "type": "webview",
+                    "id": "friendly-code-assistant-sidebar",
+                    "name": "AI Assistant"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "friendly-code-assistant.setApiKey",
+                "title": "Set GLHF API Key",
+                "category": "AI Assistant"
+            }
+        ],
+        "configuration": {
+            "title": "Friendly Code Assistant",
+            "properties": {
+                "friendlyCodeAssistant.apiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "GLHF API Key (starts with 'glhf_')"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "node ./test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.1",
+        "@types/node": "20.2.5",
+        "@types/vscode": "^1.60.0",
+        "@vscode/test-electron": "^2.3.2",
+        "eslint": "^8.41.0",
+        "glob": "^8.1.0",
+        "mocha": "^10.2.0",
+        "typescript": "^5.1.3"
+    }
+}
