@@ -8,6 +8,8 @@ class SidebarProvider {
         this._useNotifications = true; // Default to notifications
         const config = vscode.workspace.getConfiguration('friendlyCodeAssistant');
         this._currentModel = config.get('model') || 'gpt-3.5-turbo'; // Load saved model or use default
+        this._placeholderApiKey = ''; // Default placeholder API key is empty
+        const apiKey = config.get('apiKey') || this._placeholderApiKey; // Initialize with an empty key by default
     }
 
     resolveWebviewView(webviewView) {
@@ -65,13 +67,13 @@ class SidebarProvider {
         });
 
         if (apiKey) {
-            await vscode.workspace.getConfiguration().update(
-                'friendlyCodeAssistant.apiKey',
+            await vscode.workspace.getConfiguration('friendlyCodeAssistant').update(
+                'apiKey',
                 apiKey,
-                true
+                vscode.ConfigurationTarget.Global // Save globally
             );
             this._setAnimation('happy');
-            vscode.window.showInformationMessage('✨ API Key saved! You can now chat with your AI assistant.');
+            vscode.window.showInformationMessage('✨ API Key saved globally! You can now chat with your AI assistant.');
             setTimeout(() => this._setAnimation('nap'), 2000);
         }
     }
@@ -104,13 +106,15 @@ class SidebarProvider {
         this._useNotifications = !this._useNotifications;
         vscode.window.showInformationMessage(
             this._useNotifications ? 
-            '📱 Using notification popups for responses' : 
+            '🔔 Using notification popups for responses' : 
             '📄 Using panels for responses'
         );
     }
 
     async _explainSelectedCode() {
         const editor = vscode.window.activeTextEditor;
+        
+        // Check if editor is open and text is selected
         if (!editor) {
             throw new Error('No code selected. Please select some code first!');
         }
@@ -123,21 +127,23 @@ class SidebarProvider {
         }
     
         this._setAnimation('working');
+    
         try {
+            // Request a concise explanation from the AI
             const response = await this._getAIResponse(
-                `Explain this code concisely in bullet points. Focus on the main purpose and key functionality:
+                `Explain this code clearly and succinctly, focusing on its main purpose and functionality:
                 \`\`\`\n${text}\n\`\`\``,
                 true
             );
     
             if (this._useNotifications) {
-                // Clean and format the explanation for a single notification
+                // Format the explanation before displaying it
                 const formattedExplanation = this._formatExplanation(response);
     
-                // Send a single notification with the explanation
+                // Display the explanation in a clean notification
                 vscode.window.showInformationMessage(`💡 Code Explanation:\n${formattedExplanation}`);
             } else {
-                // If notifications are disabled, use the webview panel
+                // Use the webview panel to display the explanation if notifications are off
                 const panel = vscode.window.createWebviewPanel(
                     'codeExplanation',
                     '💡 Code Explanation',
@@ -151,7 +157,7 @@ class SidebarProvider {
                     <head>
                         <style>
                             body { padding: 15px; font-family: var(--vscode-font-family); }
-                            .explanation { line-height: 1.5; }
+                            .explanation { line-height: 1.5; font-size: 14px; }
                         </style>
                     </head>
                     <body>
@@ -167,10 +173,11 @@ class SidebarProvider {
     
     // Helper function to clean and format the explanation for notifications
     _formatExplanation(explanation) {
-        // Clean up the response by trimming excess spaces and combining bullet points into a single message
+        // Clean the explanation by trimming and removing excess spaces
         const lines = explanation.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-        return lines.join('\n• '); // Join bullet points with '•' and ensure each line is clean
+        return lines.join('\n• ');  // Concatenate lines as bullet points
     }
+    
     
     async _suggestCodeFix() {
         const editor = vscode.window.activeTextEditor;
@@ -181,37 +188,36 @@ class SidebarProvider {
         const selection = editor.selection;
         const text = editor.document.getText(selection);
         const language = editor.document.languageId;
-        
+    
         if (!text) {
             throw new Error('Please select the code you want me to improve!');
         }
     
         this._setAnimation('working');
+    
         try {
             const response = await this._getAIResponse(
                 `You are a code improvement expert. Analyze this ${language} code and provide improvements:
-                1. Start with "ISSUES:" followed by bullet points of main issues (max 3 points)
-                2. Then "IMPROVEMENTS:" with bullet points of specific fixes
+                1. Start with "ISSUES:" followed by a bullet-point list of main issues (maximum 3 points).
+                2. Then "IMPROVEMENTS:" with bullet points of specific, actionable fixes (e.g., optimizations, error handling, refactoring suggestions).
                 3. Finally, provide the complete improved code after "FIXED CODE:"
-                Keep explanations brief and focus on important improvements.
-    
+                Focus on improving readability, performance, and maintainability, while maintaining the original functionality.
+                
                 Original code:
                 \`\`\`${language}\n${text}\n\`\`\``,
                 true
             );
     
-            // Parse the response
+            // Parse response sections
             const sections = response.split(/ISSUES:|IMPROVEMENTS:|FIXED CODE:/i);
-            const issues = sections[1]?.trim() || '';
-            const improvements = sections[2]?.trim() || '';
-            const fixedCode = sections[3]?.trim() || '';
+            const issues = sections[1]?.trim() || 'No issues found! Please review your code for potential issues.';
+            const improvements = sections[2]?.trim() || 'No specific improvements suggested! Consider checking variable names, performance, and code readability.';
+            const fixedCode = sections[3]?.trim() || 'No fix provided. Ensure the AI properly analyzed and fixed the issues.';
     
-            // Unified code for both notifications and panel
-            const formattedFixedCode = this._sanitizeCode(fixedCode); // Sanitize any markdown formatting
+            const formattedFixedCode = this._sanitizeCode(fixedCode);
     
             if (this._useNotifications) {
-                // Show issues and improvements as a single notification to avoid spamming
-                const message = `🔍 Issues Found: \n${issues}\n\n💡 Improvements: \n${improvements}\n\n✨ Fixed Code: \n${formattedFixedCode}`;
+                const message = `🔍 Issues Found: \n${issues}\n\n💡 Improvements: \n${improvements}`;
                 vscode.window.showInformationMessage(message);
     
                 const result = await vscode.window.showInformationMessage(
@@ -226,10 +232,8 @@ class SidebarProvider {
                     });
                     this._setAnimation('happy');
                     vscode.window.showInformationMessage('✨ Code fix applied!');
-                    setTimeout(() => this._setAnimation('nap'), 2000);
                 }
             } else {
-                // If using panel view, show issues, improvements, and fixed code in the panel
                 const panel = vscode.window.createWebviewPanel(
                     'codeSuggestion',
                     '🔧 Code Improvement',
@@ -246,10 +250,11 @@ class SidebarProvider {
                         });
                         this._setAnimation('happy');
                         vscode.window.showInformationMessage('✨ Code fix applied!');
-                        setTimeout(() => this._setAnimation('nap'), 2000);
                     }
                 });
             }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Error: ${error.message}`);
         } finally {
             this._setAnimation('nap');
         }
@@ -257,86 +262,57 @@ class SidebarProvider {
     
     // This function sanitizes the code to avoid any markdown formatting issues (like ` ``` `)
     _sanitizeCode(code) {
-        return code.replace(/```[a-z]+\n/g, '').replace(/\n```/g, '');
+        return code.replace(/```[a-z]+\n/g, '').replace(/\n```/g, '').trim();
     }
     
     // This function generates HTML for the panel view
     _getCodeFixHtml(issues, improvements, fixedCode, language) {
         return `
             <!DOCTYPE html>
-            <html>
+            <html lang="en">
             <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Code Improvement</title>
                 <style>
-                    body { 
-                        padding: 15px; 
-                        font-family: var(--vscode-font-family);
-                        line-height: 1.5;
-                    }
-                    .section {
-                        margin-bottom: 20px;
-                    }
-                    .section-title {
-                        font-weight: bold;
-                        margin-bottom: 10px;
-                    }
-                    .code {
-                        background: var(--vscode-editor-background);
-                        padding: 10px;
-                        border-radius: 4px;
-                        margin: 10px 0;
-                        white-space: pre;
-                        font-family: monospace;
-                        overflow-x: auto;
-                    }
-                    button {
-                        padding: 8px 16px;
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                    }
-                    button:hover {
-                        background: var(--vscode-button-hoverBackground);
-                    }
+                    body { font-family: var(--vscode-font-family); padding: 10px; }
+                    .section { margin-bottom: 15px; }
+                    .title { font-weight: bold; margin-bottom: 5px; }
+                    .code { background: var(--vscode-editor-background); padding: 10px; border-radius: 5px; }
+                    button { margin-top: 15px; padding: 8px 16px; cursor: pointer; }
                 </style>
             </head>
             <body>
                 <div class="section">
-                    <div class="section-title">🔍 Issues Found:</div>
-                    ${issues.replace(/\n/g, '<br>')}
+                    <div class="title">🔍 Issues Found:</div>
+                    <div>${issues.replace(/\n/g, '<br>')}</div>
                 </div>
                 <div class="section">
-                    <div class="section-title">💡 Improvements:</div>
-                    ${improvements.replace(/\n/g, '<br>')}
+                    <div class="title">💡 Improvements:</div>
+                    <div>${improvements.replace(/\n/g, '<br>')}</div>
                 </div>
                 <div class="section">
-                    <div class="section-title">✨ Improved Code:</div>
-                    <div class="code">${fixedCode}</div>
-                    <button onclick="applyFix()">Apply Fix</button>
+                    <div class="title">✨ Fixed Code:</div>
+                    <pre class="code">${fixedCode}</pre>
                 </div>
+                <button id="applyFix">Apply Fix</button>
                 <script>
                     const vscode = acquireVsCodeApi();
-                    function applyFix() {
-                        vscode.postMessage({
-                            command: 'applyFix',
-                            code: ${JSON.stringify(fixedCode)}
-                        });
-                    }
+                    document.getElementById('applyFix').addEventListener('click', () => {
+                        vscode.postMessage({ command: 'applyFix', code: ${JSON.stringify(fixedCode)} });
+                    });
                 </script>
             </body>
             </html>
         `;
     }
+    
+    
 
-    
-    
-    
-    
     async _handleAIQuestion(question) {
         const config = vscode.workspace.getConfiguration('friendlyCodeAssistant');
-        const apiKey = config.get('apiKey');
-        
+        let apiKey = config.get('apiKey') || this._placeholderApiKey; // Use placeholder if no key is set
+
         if (!apiKey) {
             this._setAnimation('idle');
             await this._setupApiKey();
@@ -404,34 +380,35 @@ class SidebarProvider {
 
     async _getAIResponse(prompt, isCodeRelated = false) {
         const config = vscode.workspace.getConfiguration('friendlyCodeAssistant');
-        const apiKey = config.get('apiKey');
-
+        let apiKey = config.get('apiKey') || this._placeholderApiKey; // Use placeholder if no key is set
+    
         if (!apiKey) {
             throw new Error('Please set your API key first');
         }
-
+    
         try {
-            const systemPrompt = isCodeRelated 
-                ? 'You are a helpful coding assistant focused on clear, actionable advice. For explanations, use bullet points and keep them concise. For code improvements, clearly separate the explanation from the code solution.'
-                : 'You are a friendly cat-themed coding assistant. Keep responses concise and helpful. Use bullet points for clarity. Add occasional cat-themed emoji.';
-
+            // Refined system prompt for clear, concise responses
+            const systemPrompt = isCodeRelated
+                ? 'You are a professional coding assistant. Provide concise, direct, and actionable advice on coding tasks or issues. Focus on key concepts and functionality.'
+                : 'You are a helpful assistant. Provide brief, clear responses to the user\'s questions. Avoid unnecessary details and keep it professional.';
+    
             const requestBody = {
                 model: this._currentModel.startsWith('hf:') ? this._currentModel : `hf:${this._currentModel}`,
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: prompt }
                 ],
-                temperature: 0.7,
-                max_tokens: 1000,
+                temperature: 0.5,  // Lower temperature for direct responses
+                max_tokens: 150,  // Shorter responses
                 stream: false
             };
-
+    
             console.log('Making API request:', {
                 url: 'https://glhf.chat/api/openai/v1/chat/completions',
                 model: requestBody.model,
                 messageCount: requestBody.messages.length
             });
-
+    
             const response = await fetch('https://glhf.chat/api/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -440,76 +417,13 @@ class SidebarProvider {
                 },
                 body: JSON.stringify(requestBody)
             });
-
+    
             if (!response.ok) {
                 const error = await response.json();
                 console.error('API Error Response:', error);
                 throw new Error(error.error?.message || 'API request failed');
             }
-
-            const data = await response.json();
-            if (!data.choices?.[0]?.message?.content) {
-                console.error('Unexpected API Response:', data);
-                throw new Error('Unexpected API response format');
-            }
-
-            return data.choices[0].message.content;
-        } catch (error) {
-            console.error('API Error:', error);
-            throw new Error(`AI request failed: ${error.message}`);
-        }
-    }async _getAIResponse(prompt, isCodeRelated = false) {
-        const config = vscode.workspace.getConfiguration('friendlyCodeAssistant');
-        const apiKey = config.get('apiKey');
     
-        // Check if API key is available
-        if (!apiKey) {
-            vscode.window.showErrorMessage('API Key is not set. Please set the API key in the extension settings.');
-            throw new Error('API Key not set');
-        }
-    
-        try {
-            // Define the system prompt based on the type of question
-            const systemPrompt = isCodeRelated 
-                ? 'You are a helpful coding assistant focused on clear, actionable advice. For explanations, use bullet points and keep them concise. For code improvements, clearly separate the explanation from the code solution.'
-                : 'You are a friendly cat-themed coding assistant. Keep responses concise and helpful. Use bullet points for clarity. Add occasional cat-themed emoji.';
-    
-            // Prepare the request body
-            const requestBody = {
-                model: this._currentModel.startsWith('hf:') ? this._currentModel : `hf:${this._currentModel}`,
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.7,
-                max_tokens: 1000,
-                stream: false
-            };
-    
-            console.log('Making API request:', {
-                url: 'https://glhf.chat/api/openai/v1/chat/completions',
-                model: requestBody.model,
-                messageCount: requestBody.messages.length
-            });
-    
-            // Send the POST request to the API
-            const response = await fetch('https://glhf.chat/api/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-    
-            // Handle response error
-            if (!response.ok) {
-                const error = await response.json();
-                console.error('API Error Response:', error);
-                throw new Error(error.error?.message || 'API request failed with status ' + response.status);
-            }
-    
-            // Parse the response
             const data = await response.json();
             if (!data.choices?.[0]?.message?.content) {
                 console.error('Unexpected API Response:', data);
@@ -521,68 +435,8 @@ class SidebarProvider {
             console.error('API Error:', error);
             throw new Error(`AI request failed: ${error.message}`);
         }
-    }async _getAIResponse(prompt, isCodeRelated = false) {
-    const config = vscode.workspace.getConfiguration('friendlyCodeAssistant');
-    const apiKey = config.get('apiKey');
-
-    // Check if API key is available
-    if (!apiKey) {
-        vscode.window.showErrorMessage('API Key is not set. Please set the API key in the extension settings.');
-        throw new Error('API Key not set');
     }
-
-    try {
-        // Define the system prompt based on the type of question
-        const systemPrompt = isCodeRelated 
-            ? 'You are a helpful coding assistant focused on clear, actionable advice. For explanations, use bullet points and keep them concise. For code improvements, clearly separate the explanation from the code solution.'
-            : 'You are a friendly cat-themed coding assistant. Keep responses concise and helpful. Use bullet points for clarity. Add occasional cat-themed emoji.';
-
-        // Prepare the request body
-        const requestBody = {
-            model: "hf:mistralai/Mistral-7B-Instruct-v0.3",  // Use the correct model format
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: prompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000,
-            stream: false
-        };
-
-        // Log the request body to debug the issue
-        console.log('Request Body:', JSON.stringify(requestBody, null, 2));
-
-        // Send the POST request to the API
-        const response = await fetch('https://glhf.chat/api/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-        // Handle response error
-        if (!response.ok) {
-            const error = await response.json();
-            console.error('API Error Response:', error);
-            throw new Error(error.error?.message || 'API request failed with status ' + response.status);
-        }
-
-        // Parse the response
-        const data = await response.json();
-        if (!data.choices?.[0]?.message?.content) {
-            console.error('Unexpected API Response:', data);
-            throw new Error('Unexpected API response format');
-        }
-
-        return data.choices[0].message.content;
-    } catch (error) {
-        console.error('API Error:', error);
-        throw new Error(`AI request failed: ${error.message}`);
-    }
-}
-
+    
     
 
     _setAnimation(state) {
@@ -752,11 +606,11 @@ class SidebarProvider {
                     <div class="button-container">
                         <button onclick="setupApiKey()">🔑 Set API Key</button>
                         <button onclick="selectModel()">🤖 Model</button>
-                        <button onclick="toggleNotifications()">📱 Notifications</button>
+                        <button onclick="toggleNotifications()"> 🔄Outputs</button>
                     </div>
                     <div class="button-container">
                         <button onclick="explainCode()">💡 Explain Code</button>
-                        <button onclick="suggestFix()">🔧 Suggest Fix</button>
+                        <button onclick="suggestFix()">🔧 Fix Code</button>
                     </div>
                     <div class="input-container">
                         <input type="text" id="question" placeholder="Ask me anything...">
@@ -858,6 +712,13 @@ function activate(context) {
     
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('friendly-code-assistant-sidebar', sidebarProvider)
+    );
+
+    // Register the command to set the API key
+    context.subscriptions.push(
+        vscode.commands.registerCommand('friendly-code-assistant.setApiKey', () => {
+            sidebarProvider._setupApiKey();
+        })
     );
 
     // Show a welcome message with setup instructions if API key is not set

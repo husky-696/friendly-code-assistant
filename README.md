@@ -1,4 +1,4 @@
-# Friendly Code Assistant
+# Kato Coding Buddy
 
 A VS Code extension featuring a friendly AI coding assistant with an animated cat avatar, powered by GLHF.chat.
 
@@ -12,12 +12,13 @@ A VS Code extension featuring a friendly AI coding assistant with an animated ca
 
 ## Setup
 
-1. Sign up at [GLHF.chat](https://glhf.chat) to get your API key
-2. Install the extension
-3. Click on the cat icon in the activity bar
-4. Click "Set API Key" when prompted
-5. Enter your GLHF.chat API key
-6. Start chatting with your AI assistant!
+1. Install the extension from the VS Code marketplace
+2. Get your API key from [GLHF.chat](https://glhf.chat)
+3. Open VS Code settings and search for "Kato Coding Buddy"
+4. Enter your GLHF.chat API key in the settings
+5. Click the cat icon in the sidebar to start chatting! 🐱
+
+The extension will prompt you to enter your API key if it's not set when you try to use it.
 
 ## Usage
 
